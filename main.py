@@ -53,7 +53,7 @@ if __name__ == '__main__':
         
         path_to_load_videos = args.path_to_load_videos
         if not path_to_load_videos:
-            path_to_load_videos = os.path.join(Constants.base_data_path, model.hparams.opt['dataset'], 'all_videos')
+            path_to_load_videos = os.path.join(args.root, args.dataset, 'all_videos')
             
         print('- The path to load video files is {}'.format(path_to_load_videos))
         if not os.path.exists(path_to_load_videos):
@@ -65,19 +65,14 @@ if __name__ == '__main__':
             save_name = '{}.png'.format(args.visual_memory_example_word)
         save_path = os.path.join(args.visual_memory_example_save_path, save_name)
 
-        if len(wid2relevant) == 1:
-            index_of_image_modality = 0
-        else:
-            index_of_image_modality = model.hparams.opt['modality'].lower().index('i')
-        
         plot_visual_memory_example(
-            wid2relevant[index_of_image_modality], 
+            wid2relevant, 
             word=args.visual_memory_example_word,
             topk=args.visual_memory_example_topk, 
             vocab=model.get_vocab(),
             path_to_load_videos=path_to_load_videos,
             video_suffix=args.video_suffix,
-            n_frames=model.hparams.opt['n_frames'],
+            n_frames=args.n_frames,
             save_path=save_path
         )
     else:
@@ -91,4 +86,8 @@ python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_tit
 -vm_modality i \
 -vm_use_scores \
 --all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames
+
+python translate.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
+--path_to_load_videos ~/new_VC_data/MSRVTT/all_videos \
+-vme_topk 15 -vme_word stroller
 '''

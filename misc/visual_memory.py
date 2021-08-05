@@ -247,7 +247,7 @@ def plot_visual_memory_example(
         save_path: str = ''
     ) -> None:
     # packages for visualizing examples
-    from pretreatment.extract_frames_from_videos import extract_frames
+    from misc.extract_frames_from_videos import extract_frames
     from glob import glob
     from PIL import Image
     import matplotlib.pyplot as plt
@@ -263,6 +263,10 @@ def plot_visual_memory_example(
     relevant = wid2relevant[wid] # [2, topk]
     valid_topk = min(topk, relevant.shape[1])
     relevant_probs, relevant_indices = relevant[:, :valid_topk]
+    
+    for sf in [0.5, 1.0, 2.0, 3.0, 4.0]:
+        print('scale: %f' % sf, torch.softmax(torch.from_numpy(relevant_probs) * sf, dim=0))
+
     print(relevant_indices)
 
     # sample frames from relevant videos first and then load relevant images (frames)
@@ -306,7 +310,7 @@ def plot_visual_memory_example(
         ax.imshow(images[i])
         ax.set_yticks([])
         ax.set_xticks([])
-        ax.set_title('Prob: {:.4f}'.format(relevant_probs[i]))
+        ax.set_title('Score: {:.4f}'.format(relevant_probs[i]))
     
     if save_path:
         plt.savefig(save_path)
