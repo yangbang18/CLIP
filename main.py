@@ -11,6 +11,14 @@ from misc.visual_memory import (
     plot_visual_memory_example,
 )
 
+def generate_and_save_image_feats(args, video_ids):
+    save_path = os.path.join(args.save_path, 'encoded_image_feats.npy')
+    if os.path.exists(save_path):
+        return None
+
+    image_feats = np.zeros((len
+
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -22,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-nf', '--n_frames', type=int, default=8)
     parser.add_argument('-arch', '--arch', type=str, default='ViT-B/32', choices=clip.available_models())
     parser.add_argument('-no_cuda', '--no_cuda', default=False, action='store_true')
+    parser.add_argument('-bsz', '--batch_size', default=64, type=int)
     parser = add_visual_memory_specific_args(parser)
     args = parser.parse_args()
 
@@ -40,7 +49,7 @@ if __name__ == '__main__':
     assert os.path.exists(args.all_frames_path)
     
     assert os.path.exists(args.hparams_path)
-    hparams = yaml.safe_load(open(args.hparams_path))
+    hparams = yaml.load(open(args.hparams_path))
     args.opt = hparams['opt']
 
     if not args.save_path:
@@ -48,7 +57,7 @@ if __name__ == '__main__':
         os.makedirs(args.save_path, exist_ok=True)
 
     # start running
-    wid2relevant, file_field = get_preliminary(args, model, preprocess)
+    wid2relevant, file_field = get_preliminary(args, model, preprocess, device)
     
     if args.visual_memory_example_word:
         print('- Showing {} most relevant visual content for the specified word `{}`'.format(
@@ -85,3 +94,13 @@ if __name__ == '__main__':
         )
     else:
         generate_visual_memory(args, wid2relevant, file_field)
+
+
+'''
+python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
+-vm_topk 3 -vm_topk_per_video 1 \
+--scale_factor 1.0 \
+-vm_modality i \
+-vm_use_scores \
+--all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames
+'''

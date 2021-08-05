@@ -1,6 +1,6 @@
 import clip
 import os
-from PIL.Image import Image
+from PIL import Image
 import numpy as np
 import pickle
 from tqdm import tqdm
@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from clip.model import CLIP
-from dataloader import get_loader
+from misc.dataloader import get_loader
 from misc import Constants
 from misc.utils import get_ids_of_keyframes
 
@@ -75,7 +75,7 @@ def generate_wid2relevant(
         args: object,
         wid2vids: Dict[str, List[str]],
         model: CLIP,
-        preprocess: function,
+        preprocess,
         device: torch.device,
         vocab: Dict[int, str]
     ) -> Dict[str, np.ndarray]:
@@ -83,25 +83,31 @@ def generate_wid2relevant(
     model.to(device)
     wid2relevant = {}
 
-    for wid, vids in wid2vids.items():
+    images_record = {}
+    for wid, vids in tqdm(wid2vids.items()):
         text = clip.tokenize([vocab[wid]]).to(device)
         
         images_of_this_wid = []
         for vid in vids:
-            frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
-            frames_ids = get_ids_of_keyframes(
-                total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
-                k=args.n_frames,
-                identical=True,
-                offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
-            )
-            images_of_this_vid = []
-            for idx in frames_ids:
-                image_fn = 'image_{}.jpg'.format(idx)
-                image_path = os.path.join(frames_path_of_this_vid, image_fn)
-                images_of_this_vid.append(preprocess(Image.open(image_path)))
+            if vid in images_record:
+                images_of_this_vid = images_record[vid]
+            else:
+                frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
+                frames_ids = get_ids_of_keyframes(
+                    total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
+                    k=args.n_frames,
+                    identical=True,
+                    offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
+                )
+                images_of_this_vid = []
+                for idx in frames_ids:
+                    image_fn = '{:05d}.jpg'.format(idx)
+                    image_path = os.path.join(frames_path_of_this_vid, image_fn)
+                    images_of_this_vid.append(preprocess(Image.open(image_path)))
             
-            images_of_this_vid = torch.stack(images_of_this_vid, dim=0)
+                images_of_this_vid = torch.stack(images_of_this_vid, dim=0)
+                images_record[vid] = images_of_this_vid
+
             images_of_this_wid.append(images_of_this_vid)
             
         images_of_this_wid = torch.cat(images_of_this_wid, dim=0).to(device) # [n_vids * n_frames, *rest]
@@ -148,7 +154,7 @@ def generate_wid2relevant(
 def get_preliminary(
         args: object, 
         model: CLIP,
-        preprocess: function,
+        preprocess,
         device: torch.device,
     ) -> Tuple[str, Dict[int, np.ndarray]]:
 
