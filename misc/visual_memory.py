@@ -199,16 +199,16 @@ def get_preliminary(
     
     file_field = '{}pv'.format(args.visual_memory_topk_per_video)
     wid2relevant_path = os.path.join(args.save_path, 'wid2relevant_{}.pkl'.format(file_field))
-    
+    info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
+    vocab = info_corpus['info']['itow']
+
     if os.path.exists(wid2relevant_path):
         print('- {} exists!'.format(wid2relevant_path))
         wid2relevant = pickle.load(open(wid2relevant_path, 'rb'))
+        
     else:
         print('- {} does not exist!'.format(wid2relevant_path))
-        print('- Start generating wid2relevant:')
-
-        info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
-        
+        print('- Start generating wid2relevant:')        
         print('- Step 1: prepare encoded image features')
         encoded_image_feats = get_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
 
@@ -226,14 +226,14 @@ def get_preliminary(
             model=model,
             preprocess=preprocess,
             device=device,
-            vocab=loader.dataset.get_vocab(),
+            vocab=vocab,
             encoded_image_feats=encoded_image_feats,
         )
 
         with open(os.path.join(args.save_path, wid2relevant_path), 'wb') as f:
             pickle.dump(wid2relevant, f)
 
-    return wid2relevant, file_field
+    return wid2relevant, file_field, vocab
 
 
 def plot_visual_memory_example(

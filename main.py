@@ -45,7 +45,7 @@ if __name__ == '__main__':
         os.makedirs(args.save_path, exist_ok=True)
 
     # start running
-    wid2relevant, file_field = get_preliminary(args, model, preprocess, device)
+    wid2relevant, file_field, vocab = get_preliminary(args, model, preprocess, device)
     
     if args.visual_memory_example_word:
         print('- Showing {} most relevant visual content for the specified word `{}`'.format(
@@ -69,7 +69,7 @@ if __name__ == '__main__':
             wid2relevant, 
             word=args.visual_memory_example_word,
             topk=args.visual_memory_example_topk, 
-            vocab=model.get_vocab(),
+            vocab=vocab,
             path_to_load_videos=path_to_load_videos,
             video_suffix=args.video_suffix,
             n_frames=args.n_frames,
@@ -87,7 +87,8 @@ python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_tit
 -vm_use_scores \
 --all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames
 
-python translate.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
+python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
+--all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
 --path_to_load_videos ~/new_VC_data/MSRVTT/all_videos \
 -vme_topk 15 -vme_word stroller
 '''
