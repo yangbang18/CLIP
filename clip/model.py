@@ -353,7 +353,7 @@ class CLIP(nn.Module):
 
     def forward(self, image, text, skip_encode_image=False):
         if skip_encode_image:
-            image_features = image
+            image_features = image.type(self.dtype)
         else:
             image_features = self.encode_image(image)
         text_features = self.encode_text(text)
@@ -364,6 +364,7 @@ class CLIP(nn.Module):
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
+
         logits_per_image = logit_scale * image_features @ text_features.t()
         logits_per_text = logit_scale * text_features @ image_features.t()
 

@@ -56,7 +56,7 @@ def add_visual_memory_specific_args(parent_parser: object) -> object:
 
 
 def get_encoded_image_feats(args, model, preprocess, device, video_ids):
-    model.eva()
+    model.eval()
     model.to(device)
 
     save_path = os.path.join(args.save_path, 'encoded_image_feats_nf{}.npy'.format(args.n_frames))
@@ -64,7 +64,7 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids):
         print('- Loading encoded image features from {}'.format(save_path))
         return torch.from_numpy(np.load(save_path))
 
-    image_feats = torch.FloatTensor((len(video_ids), args.n_frames, model.embed_dim))
+    image_feats = torch.FloatTensor(len(video_ids), args.n_frames, model.embed_dim)
     for _id in tqdm(video_ids):
         vid = 'video{}'.format(_id)
         frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
@@ -125,7 +125,7 @@ def generate_wid2relevant(
         text = clip.tokenize([vocab[wid]]).to(device)
         ids = [int(vid[5:]) for vid in vids]
         
-        feats_of_this_wid = encoded_image_feats[ids] 
+        feats_of_this_wid = encoded_image_feats[ids].to(device) 
         feats_of_this_wid = feats_of_this_wid.view(-1, encoded_image_feats.shape[-1])
         assert feats_of_this_wid.shape[0] == len(vids) * args.n_frames
 
@@ -157,11 +157,7 @@ def generate_wid2relevant(
         #     logits_per_image, logits_per_text = model(images_of_this_wid, text)
         #     assert logits_per_text.shape == (1, len(vids) * args.n_frames)
         
-        if args.visual_memory_use_scores:
-            relevant_results = logits_per_text[0] / args.scale_factor
-        else:
-            relevant_results = torch.softmax(logits_per_text[0] / args.scale_factor, dim=0)
-
+        relevant_results = logits_per_text[0]
         probs, indices = relevant_results.sort(descending=True)
         valid_n_topk = min(len(vids) * args.visual_memory_topk_per_video, args.visual_memory_topk)
         vid_record = {}
@@ -182,13 +178,13 @@ def generate_wid2relevant(
                 
                 indice_record.add(new_indice)
                 
-                new_probs.append(p)
-                new_indices.append(new_indice)
+                new_probs.append(p.cpu().data)
+                new_indices.append(new_indice.cpu().data)
                 if len(new_probs) >= valid_n_topk:
                     break
         
         # print(new_indices[:10]) 
-        wid2relevant[wid] = np.array([new_probs, new_indices], dtype=np.float32)
+        wid2relevant[wid] = np.array([new_probs, new_indices])
     return wid2relevant
 
 
@@ -200,13 +196,8 @@ def get_preliminary(
     ) -> Tuple[str, Dict[int, np.ndarray]]:
 
     print('- Checking wheter wid2relevant has been generated or not:')
-    measure_type = 'scores' if args.visual_memory_use_scores else 'probs'
-    file_field = '{}_{}pv_{}_{}'.format(
-        measure_type, 
-        args.visual_memory_topk_per_video, 
-        args.visual_memory_modality,
-        int(args.scale_factor * 10),
-    )
+    
+    file_field = '{}pv'.format(args.visual_memory_topk_per_video)
     wid2relevant_path = os.path.join(args.save_path, 'wid2relevant_{}.pkl'.format(file_field))
     
     if os.path.exists(wid2relevant_path):
@@ -219,7 +210,7 @@ def get_preliminary(
         info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
         
         print('- Step 1: prepare encoded image features')
-        encoded_image_feats = get_encoded_image_feats(args, model, preprocess, video_ids=info_corpus['info']['split']['train'])
+        encoded_image_feats = get_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
 
         loader = get_loader(args.opt, mode='train', print_info=True,
             not_shuffle=True, batch_size=args.batch_size, is_validation=True, all_caps=True
@@ -347,12 +338,16 @@ def generate_visual_memory(
             feats[key].append(f)
 
     for k in feats.keys():
-        feats[k] = torch.cat(feats[k], dim=0).cpu().contiguous()
+        feats[k] = torch.cat(feats[k], dim=0).type(torch.float32)
         
     batch = feats
+    if args.visual_memory_use_scores:
+        fn = 'memory_{}_{}_top{}_{}.npy'.format('scores', file_field, args.visual_memory_topk, args.visual_memory_modality)
+    else:
+        fn = 'memory_{}_{}_top{}_{}_{:02d}.npy'.format('probs', file_field, args.visual_memory_topk, args.visual_memory_modality, int(args.scale_factor * 10))
+    
 
-    fused_memory_path = os.path.join(args.save_path, 'memory_{}_top{}.npy'.format(
-        file_field, args.visual_memory_topk))
+    fused_memory_path = os.path.join(args.save_path, fn)
     if os.path.exists(fused_memory_path):
         print('- The fused memory has been saved in {}'.format(fused_memory_path))
         return None
@@ -366,7 +361,10 @@ def generate_visual_memory(
         memory = np.zeros((opt['vocab_size'], feats.size(-1)))
         
         for wid, (probs, indices) in wid2relevant.items():
-            topk_probs = torch.from_numpy(probs[:args.visual_memory_topk])
+            topk_probs = torch.from_numpy(probs[:args.visual_memory_topk]).type(torch.float32)
+            if not args.visual_memory_use_scores:
+                topk_probs = torch.softmax(topk_probs * args.scale_factor, dim=0)
+
             topk_indices = indices[:args.visual_memory_topk]
             topk_feats = feats[topk_indices, :]
 
