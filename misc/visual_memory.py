@@ -55,6 +55,43 @@ def add_visual_memory_specific_args(parent_parser: object) -> object:
     return parent_parser
 
 
+def get_encoded_image_feats(args, model, preprocess, device, video_ids):
+    model.eva()
+    model.to(device)
+
+    save_path = os.path.join(args.save_path, 'encoded_image_feats_nf{}.npy'.format(args.n_frames))
+    if os.path.exists(save_path):
+        print('- Loading encoded image features from {}'.format(save_path))
+        return torch.from_numpy(np.load(save_path))
+
+    image_feats = torch.FloatTensor((len(video_ids), args.n_frames, model.embed_dim))
+    for _id in tqdm(video_ids):
+        vid = 'video{}'.format(_id)
+        frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
+        frames_ids = get_ids_of_keyframes(
+            total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
+            k=args.n_frames,
+            identical=True,
+            offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
+        )
+        images_of_this_vid = []
+        for idx in frames_ids:
+            image_fn = '{:05d}.jpg'.format(idx)
+            image_path = os.path.join(frames_path_of_this_vid, image_fn)
+            images_of_this_vid.append(preprocess(Image.open(image_path)))
+    
+        images_of_this_vid = torch.stack(images_of_this_vid, dim=0).to(device)
+
+        with torch.no_grad():
+            image_feats_of_this_vid = model.encode_image(images_of_this_vid)
+
+        image_feats[int(_id), :, :] = image_feats_of_this_vid.cpu()
+    
+    print('- Save encoded image features to {}'.format(save_path))
+    np.save(save_path, image_feats.numpy())
+    return image_feats
+
+
 def get_wid2vids(
         loader: DataLoader
     ) -> Tuple[Dict[int, List[int]], List[int], np.ndarray]:
@@ -77,44 +114,48 @@ def generate_wid2relevant(
         model: CLIP,
         preprocess,
         device: torch.device,
-        vocab: Dict[int, str]
+        vocab: Dict[int, str],
+        encoded_image_feats: torch.Tensor
     ) -> Dict[str, np.ndarray]:
     model.eval()
     model.to(device)
     wid2relevant = {}
 
-    images_record = {}
     for wid, vids in tqdm(wid2vids.items()):
         text = clip.tokenize([vocab[wid]]).to(device)
+        ids = [int(vid[5:]) for vid in vids]
         
-        images_of_this_wid = []
-        for vid in vids:
-            if vid in images_record:
-                images_of_this_vid = images_record[vid]
-            else:
-                frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
-                frames_ids = get_ids_of_keyframes(
-                    total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
-                    k=args.n_frames,
-                    identical=True,
-                    offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
-                )
-                images_of_this_vid = []
-                for idx in frames_ids:
-                    image_fn = '{:05d}.jpg'.format(idx)
-                    image_path = os.path.join(frames_path_of_this_vid, image_fn)
-                    images_of_this_vid.append(preprocess(Image.open(image_path)))
-            
-                images_of_this_vid = torch.stack(images_of_this_vid, dim=0)
-                images_record[vid] = images_of_this_vid
-
-            images_of_this_wid.append(images_of_this_vid)
-            
-        images_of_this_wid = torch.cat(images_of_this_wid, dim=0).to(device) # [n_vids * n_frames, *rest]
+        feats_of_this_wid = encoded_image_feats[ids] 
+        feats_of_this_wid = feats_of_this_wid.view(-1, encoded_image_feats.shape[-1])
+        assert feats_of_this_wid.shape[0] == len(vids) * args.n_frames
 
         with torch.no_grad():
-            logits_per_image, logits_per_text = model(images_of_this_wid, text)
-            assert logits_per_text.shape == (1, len(vids) * args.n_frames)
+            logits_per_image, logits_per_text = model(feats_of_this_wid, text, skip_encode_image=True)
+            assert logits_per_text.shape == (1, len(vids) * args.n_frames)  
+
+        # images_of_this_wid = []
+        # for vid in vids:
+        #     frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
+        #     frames_ids = get_ids_of_keyframes(
+        #         total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
+        #         k=args.n_frames,
+        #         identical=True,
+        #         offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
+        #     )
+        #     images_of_this_vid = []
+        #     for idx in frames_ids:
+        #         image_fn = '{:05d}.jpg'.format(idx)
+        #         image_path = os.path.join(frames_path_of_this_vid, image_fn)
+        #         images_of_this_vid.append(preprocess(Image.open(image_path)))
+        
+        #     images_of_this_vid = torch.stack(images_of_this_vid, dim=0)
+        #     images_of_this_wid.append(images_of_this_vid)
+            
+        # images_of_this_wid = torch.cat(images_of_this_wid, dim=0).to(device) # [n_vids * n_frames, *rest]
+
+        # with torch.no_grad():
+        #     logits_per_image, logits_per_text = model(images_of_this_wid, text)
+        #     assert logits_per_text.shape == (1, len(vids) * args.n_frames)
         
         if args.visual_memory_use_scores:
             relevant_results = logits_per_text[0] / args.scale_factor
@@ -175,14 +216,19 @@ def get_preliminary(
         print('- {} does not exist!'.format(wid2relevant_path))
         print('- Start generating wid2relevant:')
 
+        info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
+        
+        print('- Step 1: prepare encoded image features')
+        encoded_image_feats = get_encoded_image_feats(args, model, preprocess, video_ids=info_corpus['info']['split']['train'])
+
         loader = get_loader(args.opt, mode='train', print_info=True,
             not_shuffle=True, batch_size=args.batch_size, is_validation=True, all_caps=True
         )
 
-        print('- Step 1: preparing wid2vids')
+        print('- Step 2: preparing wid2vids')
         wid2vids = get_wid2vids(loader)
 
-        print('- Step 2: finding most relevant {} frames/segments for each word'.format(args.visual_memory_topk_max))
+        print('- Step 3: finding most relevant {} frames/segments for each word'.format(args.visual_memory_topk_max))
         wid2relevant = generate_wid2relevant(
             args=args,
             wid2vids=wid2vids,
@@ -190,6 +236,7 @@ def get_preliminary(
             preprocess=preprocess,
             device=device,
             vocab=loader.dataset.get_vocab(),
+            encoded_image_feats=encoded_image_feats,
         )
 
         with open(os.path.join(args.save_path, wid2relevant_path), 'wb') as f:

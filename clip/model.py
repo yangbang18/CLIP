@@ -351,8 +351,11 @@ class CLIP(nn.Module):
 
         return x
 
-    def forward(self, image, text):
-        image_features = self.encode_image(image)
+    def forward(self, image, text, skip_encode_image=False):
+        if skip_encode_image:
+            image_features = image
+        else:
+            image_features = self.encode_image(image)
         text_features = self.encode_text(text)
 
         # normalized features
@@ -429,4 +432,5 @@ def build_model(state_dict: dict):
 
     convert_weights(model)
     model.load_state_dict(state_dict)
+    model.embed_dim = embed_dim
     return model.eval()

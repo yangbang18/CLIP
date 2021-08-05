@@ -1,7 +1,7 @@
 import torch
 import clip
 import os
-import pickle
+from misc import Constants
 import argparse
 import yaml
 from misc.visual_memory import (
@@ -10,15 +10,6 @@ from misc.visual_memory import (
     generate_visual_memory, 
     plot_visual_memory_example,
 )
-
-def generate_and_save_image_feats(args, video_ids):
-    save_path = os.path.join(args.save_path, 'encoded_image_feats.npy')
-    if os.path.exists(save_path):
-        return None
-
-    image_feats = np.zeros((len
-
-    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -40,9 +31,6 @@ if __name__ == '__main__':
         device = 'cuda'
 
     model, preprocess = clip.load(args.arch, device=device, jit=False)
-    model.eval()
-
-    info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
     
     if not args.all_frames_path:
         args.all_frames_path = os.path.join(args.root, args.dataset, 'all_frames')
