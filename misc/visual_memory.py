@@ -159,7 +159,7 @@ def generate_wid2relevant(
         
         relevant_results = logits_per_text[0]
         probs, indices = relevant_results.sort(descending=True)
-        valid_n_topk = min(len(vids) * args.visual_memory_topk_per_video, args.visual_memory_topk)
+        valid_n_topk = min(len(vids) * args.visual_memory_topk_per_video, args.visual_memory_topk_max)
         vid_record = {}
         indice_record = set()
         new_probs, new_indices = [], []
@@ -366,13 +366,12 @@ def generate_visual_memory(
         
         for wid, (probs, indices) in wid2relevant.items():
             topk_probs = torch.from_numpy(probs[:args.visual_memory_topk]).type(torch.float32)
-            if not args.visual_memory_use_scores:
-                topk_probs = torch.softmax(topk_probs * args.scale_factor, dim=0)
+            topk_probs = torch.softmax(topk_probs * args.scale_factor, dim=-1)
 
             topk_indices = indices[:args.visual_memory_topk]
             topk_feats = feats[topk_indices, :]
 
-            result = torch.matmul(topk_probs.unsqueeze(0), topk_feats) / topk_probs.sum() # [1, topk] * [topk, dim] = [1, dim]
+            result = (topk_probs.unsqueeze(1) * topk_feats).sum(0) / topk_probs.sum()
             memory[wid, :] = result.squeeze(0).numpy()
 
         all_memory.append(memory)

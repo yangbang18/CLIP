@@ -14,7 +14,7 @@ from misc.visual_memory import (
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', type=str, default='MSRVTT', choices=['MSRVTT', 'Youtube2Text'])
-    parser.add_argument('-root', '--root', type=str, default='/home/yangbang/VC_data')
+    parser.add_argument('-root', '--root', type=str, default='/home/yangbang/new_VC_data')
     parser.add_argument('-sp', '--save_path', type=str, default='')
     parser.add_argument('-fp', '--all_frames_path', type=str, default='')
     parser.add_argument('-hpp', '--hparams_path', type=str, required=True)
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     args.opt = hparams['opt']
 
     if not args.save_path:
-        args.save_path = os.path.join(args.root, 'visual_memory_CLIP')
+        args.save_path = os.path.join(args.root, args.dataset, 'visual_memory_CLIP')
         os.makedirs(args.save_path, exist_ok=True)
 
     # start running
