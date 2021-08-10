@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from clip.model import CLIP
 from misc.dataloader import get_loader
 from misc import Constants
-from misc.utils import get_ids_of_keyframes
+from misc.utils import get_ids_of_keyframes, get_uniform_ids_from_k_snippets
 
 
 def add_visual_memory_specific_args(parent_parser: object) -> object:
@@ -55,11 +55,15 @@ def add_visual_memory_specific_args(parent_parser: object) -> object:
     return parent_parser
 
 
-def get_encoded_image_feats(args, model, preprocess, device, video_ids):
+def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_frames=True):
     model.eval()
     model.to(device)
 
-    save_path = os.path.join(args.save_path, 'encoded_image_feats_nf{}.npy'.format(args.n_frames))
+    if only_n_frames:
+        save_path = os.path.join(args.save_path, 'encoded_image_feats_nf{}.npy'.format(args.n_frames))
+    else:
+        save_path = os.path.join(args.save_path, 'encoded_image_feats_nf{}.npy'.format(60))
+
     if os.path.exists(save_path):
         print('- Loading encoded image features from {}'.format(save_path))
         return torch.from_numpy(np.load(save_path))
@@ -68,12 +72,19 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids):
     for _id in tqdm(video_ids):
         vid = 'video{}'.format(_id)
         frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
-        frames_ids = get_ids_of_keyframes(
-            total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
-            k=args.n_frames,
-            identical=True,
-            offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
-        )
+        if only_n_frames:
+            frames_ids = get_ids_of_keyframes(
+                total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
+                k=args.n_frames,
+                identical=True,
+                offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
+            )
+        else:
+            frames_ids = get_uniform_ids_from_k_snippets(
+                length=len(os.listdir(frames_path_of_this_vid)),
+                k=60,
+                offset=1
+            )
         images_of_this_vid = []
         for idx in frames_ids:
             image_fn = '{:05d}.jpg'.format(idx)
