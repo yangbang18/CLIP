@@ -41,6 +41,7 @@ if __name__ == '__main__':
     }
 
     info_corpus = pickle.load(open(opt['info_corpus'], 'rb'))
+    args.n_frames = 60
     
     encoded_image_feats = get_encoded_image_feats(
         args, model, preprocess, device, 
