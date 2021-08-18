@@ -52,6 +52,7 @@ def add_visual_memory_specific_args(parent_parser: object) -> object:
             'by default, it will be set to os.path.join(Constant.base_data.path, dataset, all_videos)')
     
     parser.add_argument('--video_suffix', type=str, default='mp4')
+    parser.add_argument('--mean_average', default=False, action='store_true')
     return parent_parser
 
 
@@ -208,7 +209,7 @@ def get_preliminary(
 
     print('- Checking wheter wid2relevant has been generated or not:')
     
-    file_field = '{}pv'.format(args.visual_memory_topk_per_video)
+    file_field = 'nf{}_{}pv'.format(args.n_frames, args.visual_memory_topk_per_video)
     wid2relevant_path = os.path.join(args.save_path, 'wid2relevant_{}.pkl'.format(file_field))
     info_corpus = pickle.load(open(os.path.join(args.root, args.dataset, 'info_corpus.pkl'), 'rb'))
     vocab = info_corpus['info']['itow']
@@ -357,10 +358,14 @@ def generate_visual_memory(
         
     batch = feats
     if args.visual_memory_use_scores:
-        fn = 'memory_{}_{}_top{}_{}.npy'.format('scores', file_field, args.visual_memory_topk, args.visual_memory_modality)
+        fn = 'memory_{}_{}_top{}_{}'.format('scores', file_field, args.visual_memory_topk, args.visual_memory_modality)
     else:
-        fn = 'memory_{}_{}_top{}_{}_{:02d}.npy'.format('probs', file_field, args.visual_memory_topk, args.visual_memory_modality, int(args.scale_factor * 10))
+        fn = 'memory_{}_{}_top{}_{}_{:02d}'.format('probs', file_field, args.visual_memory_topk, args.visual_memory_modality, int(args.scale_factor * 10))
     
+    if args.mean_average:
+        fn = fn + '_mean'
+
+    fn = fn + '.npy'
 
     fused_memory_path = os.path.join(args.save_path, fn)
     if os.path.exists(fused_memory_path):
@@ -382,8 +387,11 @@ def generate_visual_memory(
             topk_indices = indices[:args.visual_memory_topk]
             topk_feats = feats[topk_indices, :]
 
-            result = (topk_probs.unsqueeze(1) * topk_feats).sum(0) / topk_probs.sum()
-            memory[wid, :] = result.squeeze(0).numpy()
+            if args.mean_average:
+                memory[wid, :] = topk_feats.mean(0).numpy()
+            else:
+                result = (topk_probs.unsqueeze(1) * topk_feats).sum(0) / topk_probs.sum()
+                memory[wid, :] = result.squeeze(0).numpy()
 
         all_memory.append(memory)
     
