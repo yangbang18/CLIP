@@ -45,7 +45,7 @@ if __name__ == '__main__':
         os.makedirs(args.save_path, exist_ok=True)
 
     # start running
-    wid2relevant, file_field, vocab = get_preliminary(args, model, preprocess, device)
+    wid2relevant, file_field, vocab, encoded_image_feats = get_preliminary(args, model, preprocess, device)
     
     if args.visual_memory_example_word:
         print('- Showing {} most relevant visual content for the specified word `{}`'.format(
@@ -76,16 +76,26 @@ if __name__ == '__main__':
             save_path=save_path
         )
     else:
-        generate_visual_memory(args, wid2relevant, file_field)
+        generate_visual_memory(args, wid2relevant, file_field, encoded_image_feats)
 
 
 '''
-python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
--vm_topk 3 -vm_topk_per_video 1 \
---scale_factor 1.0 \
--vm_modality i \
--vm_use_scores \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames
+python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
+--all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
+-vm_topk 5 -vm_topk_per_video 1 \
+-t 1.0 \
+-vm_modality mi \
+-vm_source_type raw \
+-nf 28 \
+-arch ViT-B/32
+
+python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
+--all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
+-vm_topk 5 -vm_topk_per_video 1 \
+-t 1.0 \
+-vm_source_type hidden \
+-nf 28 \
+-arch ViT-B/32
 
 python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_titanx/base/default/version_0/hparams.yaml \
 --all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
