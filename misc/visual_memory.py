@@ -60,31 +60,23 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_f
 
     save_path = os.path.join(args.save_path, '{}_encoded_image_feats_nf{}.npy'.format(args.arch, 60))
 
+    ids = get_uniform_ids_from_k_snippets(60, args.n_frames)
     if os.path.exists(save_path):
         print('- Loading encoded image features from {}'.format(save_path))
         if only_n_frames:
-            ids = get_uniform_ids_from_k_snippets(60, args.n_frames)
-            return torch.from_numpy(np.load(save_path)[:, ids, :])
+            return torch.from_numpy(np.load(save_path)[:, ids, :]).float()
         else:
-            return torch.from_numpy(np.load(save_path))
+            return torch.from_numpy(np.load(save_path)).float()
         
-    image_feats = torch.FloatTensor(len(video_ids), args.n_frames, model.embed_dim)
+    image_feats = torch.FloatTensor(len(video_ids), 60, model.embed_dim)
     for _id in tqdm(video_ids):
         vid = 'video{}'.format(_id)
         frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
-        if only_n_frames:
-            frames_ids = get_ids_of_keyframes(
-                total_frames_of_a_video=len(os.listdir(frames_path_of_this_vid)),
-                k=args.n_frames,
-                identical=True,
-                offset=1 # the first sampled frame is vid_00001.png (start from 1 rather than 0)
-            )
-        else:
-            frames_ids = get_uniform_ids_from_k_snippets(
-                length=len(os.listdir(frames_path_of_this_vid)),
-                k=60,
-                offset=1
-            )
+        frames_ids = get_uniform_ids_from_k_snippets(
+            length=len(os.listdir(frames_path_of_this_vid)),
+            k=60,
+            offset=1
+        )
         images_of_this_vid = []
         for idx in frames_ids:
             image_fn = '{:05d}.jpg'.format(idx)
@@ -100,7 +92,10 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_f
     
     print('- Save encoded image features to {}'.format(save_path))
     np.save(save_path, image_feats.numpy())
-    return image_feats
+
+    if only_n_frames:
+        return torch.from_numpy(image_feats[:, ids, :]).float()
+    return torch.from_numpy(image_feats).float()
 
 
 def get_wid2vids(
@@ -360,7 +355,7 @@ def generate_visual_memory(
         args: object,
         wid2relevant: Dict[int, np.ndarray], 
         file_field: str,
-        encoded_image_feats: np.ndarray,
+        encoded_image_feats: torch.Tensor,
     ) -> None:
     opt = args.opt
 
@@ -373,6 +368,8 @@ def generate_visual_memory(
         fn = fn + '_mean'
     else:
         fn = fn + '_{:g}'.format(args.temperature)
+
+    fn = fn + '.npy'
 
     fused_memory_path = os.path.join(args.save_path, fn)
     if os.path.exists(fused_memory_path):
@@ -406,9 +403,8 @@ def generate_visual_memory(
 
         fused_memory = np.concatenate(all_memory, axis=-1)
     else:
-        encoded_feats = encoded_image_feats
-        encoded_feats = encoded_feats.view(-1, encoded_feats.size(-1)) # [n_training_videos * n_frames, dim]
-        fused_memory = core(args, wid2relevant, encoded_feats)
+        encoded_image_feats = encoded_image_feats.contiguous().view(-1, encoded_image_feats.shape[-1]) # [n_training_videos * n_frames, dim]
+        fused_memory = core(args, wid2relevant, encoded_image_feats)
     
     np.save(fused_memory_path, fused_memory)
     

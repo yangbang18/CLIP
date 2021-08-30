@@ -31,6 +31,7 @@ if __name__ == '__main__':
         device = 'cuda'
 
     model, preprocess = clip.load(args.arch, device=device, jit=False)
+    args.arch = args.arch.replace('/', '-')
     
     if not args.all_frames_path:
         args.all_frames_path = os.path.join(args.root, args.dataset, 'all_frames')
@@ -81,7 +82,6 @@ if __name__ == '__main__':
 
 '''
 python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
 -vm_topk 5 -vm_topk_per_video 1 \
 -t 1.0 \
 -vm_modality mi \
@@ -90,7 +90,6 @@ python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/de
 -arch ViT-B/32
 
 python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
 -vm_topk 5 -vm_topk_per_video 1 \
 -t 1.0 \
 -vm_source_type hidden \
