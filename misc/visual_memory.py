@@ -15,6 +15,8 @@ from misc.dataloader import get_loader
 from misc import Constants
 from misc.utils import get_ids_of_keyframes, get_uniform_ids_from_k_snippets
 
+import h5py
+
 
 def add_visual_memory_specific_args(parent_parser: object) -> object:
     parser = parent_parser.add_argument_group(title='Settings of generating visual memory')
@@ -61,16 +63,25 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_f
     save_path = os.path.join(args.save_path, '{}_encoded_image_feats_nf{}.npy'.format(args.arch, 60))
 
     ids = get_uniform_ids_from_k_snippets(60, args.n_frames)
-    if os.path.exists(save_path):
+    if os.path.exists(save_path) and not args.save_all_feats:
         print('- Loading encoded image features from {}'.format(save_path))
         if only_n_frames:
             return torch.from_numpy(np.load(save_path)[:, ids, :]).float()
         else:
             return torch.from_numpy(np.load(save_path)).float()
-        
+    
+    db = None
+    if args.save_all_feats:
+        print('- Save all feats to {}'.format(args.feats_save_path))
+        db = h5py.File(args.feats_save_path, 'a')
+    
     image_feats = torch.FloatTensor(len(video_ids), 60, model.embed_dim)
+    
     for _id in tqdm(video_ids):
         vid = 'video{}'.format(_id)
+        if db is not None and vid in db.keys(): 
+            continue
+
         frames_path_of_this_vid = os.path.join(args.all_frames_path, vid)
         frames_ids = get_uniform_ids_from_k_snippets(
             length=len(os.listdir(frames_path_of_this_vid)),
@@ -89,13 +100,17 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_f
             image_feats_of_this_vid = model.encode_image(images_of_this_vid)
 
         image_feats[int(_id), :, :] = image_feats_of_this_vid.cpu()
+        db[vid] = image_feats_of_this_vid.cpu().numpy()
     
+    if db is not None:
+        db.close()
+
     print('- Save encoded image features to {}'.format(save_path))
     np.save(save_path, image_feats.numpy())
 
     if only_n_frames:
-        return torch.from_numpy(image_feats[:, ids, :]).float()
-    return torch.from_numpy(image_feats).float()
+        return image_feats[:, ids, :]
+    return image_feats
 
 
 def get_wid2vids(
