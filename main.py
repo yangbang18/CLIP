@@ -11,7 +11,7 @@ from misc.visual_memory import (
     get_preliminary, 
     generate_visual_memory, 
     plot_visual_memory_example,
-    get_encoded_image_feats,
+    prepare_encoded_image_feats,
 )
 
 if __name__ == '__main__':
@@ -25,7 +25,6 @@ if __name__ == '__main__':
     parser.add_argument('-arch', '--arch', type=str, default='ViT-B/32', choices=clip.available_models())
     parser.add_argument('-no_cuda', '--no_cuda', default=False, action='store_true')
     parser.add_argument('-bsz', '--batch_size', default=64, type=int)
-    parser.add_argument('--save_all_feats', default=False, action='store_true')
     parser = add_visual_memory_specific_args(parser)
     args = parser.parse_args()
 
@@ -48,16 +47,6 @@ if __name__ == '__main__':
     if not args.save_path:
         args.save_path = os.path.join(args.root, args.dataset, 'visual_memory_CLIP')
         os.makedirs(args.save_path, exist_ok=True)
-    
-    if args.save_all_feats:
-        args.feats_save_path = os.path.join(args.root, args.dataset, 'feats')
-        os.makedirs(args.feats_save_path, exist_ok=True)
-        args.feats_save_path = os.path.join(args.feats_save_path, 'CLIP_{}.hdf5'.format(args.arch))
-        
-        split = pickle.load(open(args.opt['info_corpus'], 'rb'))['info']['split']
-        all_video_ids = split['train'] + split['validate'] + split['test']
-        get_encoded_image_feats(args, model, preprocess, device, video_ids=all_video_ids)
-        sys.exit(0)
 
     # start running
     wid2relevant, file_field, vocab, encoded_image_feats = get_preliminary(args, model, preprocess, device)
@@ -114,21 +103,4 @@ python main.py -hpp /home/yangbang/NACF-pl/experiments/MSRVTT/Transformer_in_tit
 --all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
 --path_to_load_videos ~/new_VC_data/MSRVTT/all_videos \
 -vme_topk 15 -vme_word stroller
-
-
-python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
--arch RN101 --save_all_feats
-
-CUDA_VISIBLE_DEVICES=1 python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
--arch RN50 --save_all_feats
-
-CUDA_VISIBLE_DEVICES=2 python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
--arch RN50x4 --save_all_feats
-
-CUDA_VISIBLE_DEVICES=3 python main.py -hpp /home/yangbang/mygit/NACF-pl/experiments/MSRVTT/EQTF/base/default/version_0/hparams.yaml \
---all_frames_path /home/yangbang/new_VC_data/MSRVTT/all_frames \
--arch ViT --save_all_feats
 '''

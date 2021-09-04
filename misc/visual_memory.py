@@ -56,26 +56,26 @@ def add_visual_memory_specific_args(parent_parser: object) -> object:
     return parent_parser
 
 
-def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_frames=True):
+def prepare_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_frames=True, db=None):
     model.eval()
     model.to(device)
 
-    save_path = os.path.join(args.save_path, '{}_encoded_image_feats_nf{}.npy'.format(args.arch, 60))
+    if db is None:
+        # save feats to .npy
+        save_path = os.path.join(args.save_path, '{}_encoded_image_feats_nf{}.npy'.format(args.arch, 60))
 
-    ids = get_uniform_ids_from_k_snippets(60, args.n_frames)
-    if os.path.exists(save_path) and not args.save_all_feats:
-        print('- Loading encoded image features from {}'.format(save_path))
-        if only_n_frames:
-            return torch.from_numpy(np.load(save_path)[:, ids, :]).float()
-        else:
-            return torch.from_numpy(np.load(save_path)).float()
+        ids = get_uniform_ids_from_k_snippets(60, args.n_frames)
+        if os.path.exists(save_path):
+            print('- Loading encoded image features from {}'.format(save_path))
+            if only_n_frames:
+                return torch.from_numpy(np.load(save_path)[:, ids, :]).float()
+            else:
+                return torch.from_numpy(np.load(save_path)).float()
     
-    db = None
-    if args.save_all_feats:
-        print('- Save all feats to {}'.format(args.feats_save_path))
-        db = h5py.File(args.feats_save_path, 'a')
-    
-    image_feats = torch.FloatTensor(len(video_ids), 60, model.embed_dim)
+        image_feats = torch.FloatTensor(len(video_ids), 60, model.embed_dim)
+    else:
+        # save feats to .hdf5
+        pass
     
     for _id in tqdm(video_ids):
         vid = 'video{}'.format(_id)
@@ -99,18 +99,18 @@ def get_encoded_image_feats(args, model, preprocess, device, video_ids, only_n_f
         with torch.no_grad():
             image_feats_of_this_vid = model.encode_image(images_of_this_vid)
 
-        image_feats[int(_id), :, :] = image_feats_of_this_vid.cpu()
-        db[vid] = image_feats_of_this_vid.cpu().numpy()
+        if db is None:
+            image_feats[int(_id), :, :] = image_feats_of_this_vid.cpu()
+        else:
+            db[vid] = image_feats_of_this_vid.cpu().numpy()
     
-    if db is not None:
-        db.close()
+    if db is None:
+        print('- Save encoded image features to {}'.format(save_path))
+        np.save(save_path, image_feats.numpy())
 
-    print('- Save encoded image features to {}'.format(save_path))
-    np.save(save_path, image_feats.numpy())
-
-    if only_n_frames:
-        return image_feats[:, ids, :]
-    return image_feats
+        if only_n_frames:
+            return image_feats[:, ids, :]
+        return image_feats
 
 
 def get_wid2vids(
@@ -228,12 +228,12 @@ def get_preliminary(
     if os.path.exists(wid2relevant_path):
         print('- {} exists!'.format(wid2relevant_path))
         wid2relevant = pickle.load(open(wid2relevant_path, 'rb'))
-        encoded_image_feats = get_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
+        encoded_image_feats = prepare_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
     else:
         print('- {} does not exist!'.format(wid2relevant_path))
         print('- Start generating wid2relevant:')        
         print('- Step 1: prepare encoded image features')
-        encoded_image_feats = get_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
+        encoded_image_feats = prepare_encoded_image_feats(args, model, preprocess, device, video_ids=info_corpus['info']['split']['train'])
 
         loader = get_loader(args.opt, mode='train', print_info=True,
             not_shuffle=True, batch_size=args.batch_size, is_validation=True, all_caps=True

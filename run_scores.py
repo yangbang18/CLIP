@@ -5,7 +5,7 @@ from misc import Constants
 import argparse
 import pickle
 from misc.visual_memory import (
-    get_encoded_image_feats
+    prepare_encoded_image_feats
 )
 from misc.dataloader import get_loader
 from tqdm import tqdm
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     info_corpus = pickle.load(open(opt['info_corpus'], 'rb'))
     args.n_frames = 60
     
-    encoded_image_feats = get_encoded_image_feats(
+    encoded_image_feats = prepare_encoded_image_feats(
         args, model, preprocess, device, 
         video_ids=info_corpus['info']['split']['train'],
         only_n_frames=False
@@ -81,5 +81,5 @@ if __name__ == '__main__':
     np.save(save_path, scores_map_of_all_train_caps)
 
 '''
-python run_relevance.py --dataset MSRVTT
+python run_scores.py --dataset MSRVTT
 '''
