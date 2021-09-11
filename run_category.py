@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('-no_cuda', '--no_cuda', default=False, action='store_true')
     parser.add_argument('-nf', '--n_frames', type=int, default=28)
     parser.add_argument('-ft', '--fusion_type', type=str, default='mean', choices=['mean', 'max'])
-    parser.add_argument('-vis', '--visualize', default=False, action='stroe_true')
+    parser.add_argument('-vis', '--visualize', default=False, action='store_true')
     args = parser.parse_args()
 
     if args.no_cuda or not torch.cuda.is_available():
@@ -73,18 +73,24 @@ if __name__ == '__main__':
             logits_per_image, logits_per_category = model(
                 feats_of_this_video, tokenized_category, skip_encode_image=True)
             
-            assert logits_per_image.shape == (1, args.n_frames, len(category))
-            logtis_category = logits_per_image.mean(1) if args.fusion_type == 'mean' else \
-                                logits_per_image.max(1)[0]
+            assert logits_per_image.shape == (args.n_frames, len(category))
+            logtis_category = logits_per_image.mean(0) if args.fusion_type == 'mean' else \
+                                logits_per_image.max(0)[0]
             
-            logtis_category = logtis_category.squeeze() # [len(category)]
             _, pred_category = logtis_category.max(0)
-            
             new_itoc[_id] = pred_category.cpu().item()
 
     db.close()
     pickle.dump(new_itoc, open(itoc_save_path, 'wb'))
 
 '''
+python run_category.py -d MSRVTT -arch RN50 -nf 28 -ft mean
 python run_category.py -d MSRVTT -arch RN101 -nf 28 -ft mean
+python run_category.py -d MSRVTT -arch RN50x4 -nf 28 -ft mean
+python run_category.py -d MSRVTT -arch ViT-B/32 -nf 28 -ft mean
+
+python run_category.py -d MSRVTT -arch RN50 -nf 28 -ft max
+python run_category.py -d MSRVTT -arch RN101 -nf 28 -ft max
+python run_category.py -d MSRVTT -arch RN50x4 -nf 28 -ft max
+python run_category.py -d MSRVTT -arch ViT-B/32 -nf 28 -ft max
 '''
