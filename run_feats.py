@@ -21,6 +21,7 @@ if __name__ == '__main__':
         device = 'cuda'
 
     model, preprocess = clip.load(args.arch, device=device, jit=False)
+    model.float() # this is important to reproduce the same results in NACF-pl
     args.arch = args.arch.replace('/', '-')
     
     if not args.all_frames_path:
